@@ -1,4 +1,6 @@
+import hashlib
 import json
+import os
 import streamlit as st
 from google import genai
 from google.genai import types
@@ -42,7 +44,88 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# 3. Загрузка базы знаний
+# 3. Модуль пользователей (Хранилище в users.json)
+USERS_FILE = "users.json"
+
+def hash_password(password: str) -> str:
+    """Безопасное хеширование пароля через SHA-256."""
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+def load_users() -> dict:
+    if not os.path.exists(USERS_FILE):
+        return {}
+    try:
+        with open(USERS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def save_users(users: dict):
+    with open(USERS_FILE, "w", encoding="utf-8") as f:
+        json.dump(users, f, ensure_ascii=False, indent=2)
+
+# Инициализация состояния авторизации
+if "is_authenticated" not in st.session_state:
+    st.session_state.is_authenticated = False
+if "username" not in st.session_state:
+    st.session_state.username = ""
+
+# 4. Форма авторизации и регистрации
+if not st.session_state.is_authenticated:
+    st.markdown("### 🎓 Софтлайн Образование | Вход и Регистрация")
+    st.caption("Войдите в личный кабинет, чтобы получить доступ к AI-наставнику и тренажёру кейсов.")
+
+    tab_login, tab_register = st.tabs(["🔑 Вход в аккаунт", "📝 Регистрация"])
+
+    # Вход
+    with tab_login:
+        with st.form("form_login"):
+            login_user = st.text_input("Логин / Имя пользователя", key="login_u")
+            login_pass = st.text_input("Пароль", type="password", key="login_p")
+            submit_login = st.form_submit_button("Войти", use_container_width=True)
+
+            if submit_login:
+                users = load_users()
+                hashed = hash_password(login_pass)
+                if login_user in users and users[login_user]["password"] == hashed:
+                    st.session_state.is_authenticated = True
+                    st.session_state.username = login_user
+                    st.success(f"Добро пожаловать, {login_user}!")
+                    st.rerun()
+                else:
+                    st.error("Неверный логин или пароль. Проверьте данные или зарегистрируйтесь.")
+
+    # Регистрация
+    with tab_register:
+        with st.form("form_register"):
+            reg_user = st.text_input("Придумайте логин", key="reg_u")
+            reg_email = st.text_input("Ваш Email или Telegram", key="reg_e")
+            reg_pass1 = st.text_input("Придумайте пароль", type="password", key="reg_p1")
+            reg_pass2 = st.text_input("Повторите пароль", type="password", key="reg_p2")
+            submit_reg = st.form_submit_button("Зарегистрироваться", use_container_width=True)
+
+            if submit_reg:
+                users = load_users()
+                clean_user = reg_user.strip()
+                if not clean_user or not reg_pass1:
+                    st.warning("Пожалуйста, заполните логин и пароль.")
+                elif clean_user in users:
+                    st.error("Пользователь с таким логином уже существует!")
+                elif reg_pass1 != reg_pass2:
+                    st.error("Введенные пароли не совпадают.")
+                elif len(reg_pass1) < 4:
+                    st.error("Пароль должен содержать минимум 4 символа.")
+                else:
+                    users[clean_user] = {
+                        "password": hash_password(reg_pass1),
+                        "contact": reg_email.strip()
+                    }
+                    save_users(users)
+                    st.success("Регистрация успешна! Теперь перейдите во вкладку «🔑 Вход в аккаунт».")
+
+    st.stop()  # Блокирует дальнейший рендер чата до успешного входа
+
+# 5. Загрузка базы знаний
 @st.cache_data
 def load_knowledge_base():
     try:
@@ -54,9 +137,9 @@ def load_knowledge_base():
 
 kb_data = load_knowledge_base()
 knowledge_base_text = json.dumps(kb_data, ensure_ascii=False, indent=2)
-disclaimer_text = kb_data.get("disclaimer", "⚠️ Обратите внимание: ответы бота носят исключительно информационный характер и не заменяют официальные требования вузов и работодателей.")
+disclaimer_text = kb_data.get("disclaimer", "⚠️ Обратите внимание: ответы бота носят исключительно информационный характер и не заменяют официальные требования вузов и работодателей.")[cite: 3, 9]
 
-# 4. Поиск по официальным источникам
+# 6. Поиск по официальным источникам
 def search_official_sources(query: str, max_results: int = 4):
     try:
         from duckduckgo_search import DDGS
@@ -70,14 +153,14 @@ def search_official_sources(query: str, max_results: int = 4):
     except Exception:
         return ""
 
-# 5. Инициализация сессий
+# 7. Инициализация сессий
 if "chat_sessions" not in st.session_state:
     st.session_state.chat_sessions = {
         "Диалог 1": [
             {
                 "role": "assistant",
                 "content": (
-                    "👋 **Привет! Я образовательный AI-наставник Софтлайн.**\n\n"
+                    f"👋 **Привет, {st.session_state.username}! Я образовательный AI-наставник Софтлайн.**\n\n"
                     "Я помогу тебе пройти путь от выбора вуза до первой работы в IT:\n"
                     "• **Навигатор:** подбор вузов РФ по баллам ЕГЭ, проверка аккредитации, общежитий и стажировок.\n"
                     "• **Тренажёр:** решение реальных каверзных кейсов с экспертной обратной связью.\n\n"
@@ -101,9 +184,18 @@ if "detail_mode" not in st.session_state:
     st.session_state.detail_mode = "Подробный разбор с примерами"
 if "use_search" not in st.session_state:
     st.session_state.use_search = True
+if "voice_transcript" not in st.session_state:
+    st.session_state.voice_transcript = ""
 
-# 6. Боковая панель: Управление диалогами и Поддержка
+# 8. Боковая панель: Профиль, Управление диалогами и Поддержка
 with st.sidebar:
+    st.markdown(f"👤 **Пользователь:** `{st.session_state.username}`")
+    if st.button("🚪 Выйти из аккаунта", use_container_width=True, key="btn_logout"):
+        st.session_state.is_authenticated = False
+        st.session_state.username = ""
+        st.rerun()
+
+    st.divider()
     st.subheader("💬 История диалогов")
     if st.button("➕ Новый чат", use_container_width=True, key="btn_create_new_chat"):
         new_name = f"Диалог {len(st.session_state.chat_sessions) + 1}"
@@ -144,18 +236,18 @@ with st.sidebar:
 
     st.divider()
 
-    # Блок технической поддержки с отправкой на почту den13ast@mail.ru
+    # Блок технической поддержки
     with st.popover("🆘 Поддержка и кураторы", use_container_width=True):
         st.markdown("#### ✉️ Связь с наставником")
         st.caption("Напиши свой вопрос или сообщи об ошибке — письмо придёт куратору на почту:")
         
-        support_html = """
+        support_html = f"""
         <form action="https://formsubmit.co/den13ast@mail.ru" method="POST" target="_blank">
-            <input type="hidden" name="_subject" value="Новое обращение из AI-Тренажёра Софтлайн!">
+            <input type="hidden" name="_subject" value="Новое обращение от {st.session_state.username}">
             <input type="hidden" name="_captcha" value="false">
             <div style="margin-bottom: 10px;">
-                <label style="font-size: 13px; color: #ccc;">Твоё имя или ник:</label><br>
-                <input type="text" name="Имя_пользователя" required style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff;">
+                <label style="font-size: 13px; color: #ccc;">Твоё имя или логин:</label><br>
+                <input type="text" name="Имя_пользователя" value="{st.session_state.username}" required style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff;">
             </div>
             <div style="margin-bottom: 10px;">
                 <label style="font-size: 13px; color: #ccc;">Твой контакт (Telegram / Email):</label><br>
@@ -175,7 +267,7 @@ with st.sidebar:
     st.markdown("---")
     st.caption(disclaimer_text)
 
-# 7. Верхняя панель
+# 9. Верхняя панель
 top_col_left, top_col_guide, top_col_settings = st.columns([2.5, 0.9, 0.9])
 
 with top_col_left:
@@ -199,6 +291,10 @@ with top_col_guide:
         **2. Режимы работы:**
         * **🎓 Обычный (Навигатор)** — подбор вузов РФ по баллам ЕГЭ, проверка общежитий и военной кафедры, аудит портфолио и поиск стажировок.
         * **🎯 Интерактивный тренажёр** — решение проблемных кейсов (выбор вуза, собеседование, адаптация).
+        
+        ---
+        **3. Голосовой ввод:**
+        * Внизу экрана доступна кнопка **«🎤 Начать запись»** — браузер запишет твой голос и распознает текст на русском языке.
         """)
 
 with top_col_settings:
@@ -240,7 +336,7 @@ with top_col_settings:
             key="slider_creativity"
         )
 
-# 8. Содержимое категории
+# 10. Содержимое категории
 is_trainer_mode = (app_category == "🎯 Интерактивный тренажёр")
 
 if is_trainer_mode:
@@ -296,7 +392,7 @@ else:
 
 st.divider()
 
-# 9. Отрисовка сообщений
+# 11. Отрисовка сообщений
 chat_box = st.container()
 with chat_box:
     for idx, message in enumerate(current_messages):
@@ -307,7 +403,88 @@ with chat_box:
             with st.chat_message("user"):
                 st.markdown(message["content"])
 
-# 10. Ввод сообщений
+# 12. Виджет голосового ввода (Web Speech API)
+with st.expander("🎤 Голосовой ответ (нажмите, чтобы продиктовать)", expanded=False):
+    st.caption("Нажмите кнопку записи, разрешите микрофон и продиктуйте ваш ответ. Текст распознается автоматически:")
+    
+    # Считываем переданный через URL-параметры распознанный текст (если был)
+    query_params = st.query_params
+    voice_query = query_params.get("voice_text", None)
+
+    speech_js = """
+    <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 8px;">
+        <button id="btn_rec" onclick="toggleRecord()" style="background: #28a745; color: #fff; border: none; padding: 9px 18px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px;">
+            🎙 Начать запись
+        </button>
+        <span id="rec_status" style="font-size: 13px; color: #aaa;">Готов к записи</span>
+    </div>
+    <div id="rec_output" style="padding: 10px; background: rgba(255,255,255,0.05); border: 1px dashed rgba(255,255,255,0.2); border-radius: 8px; font-size: 14px; min-height: 40px; color: #eee;">
+        Здесь появится распознанный текст...
+    </div>
+
+    <script>
+        const btn = document.getElementById("btn_rec");
+        const status = document.getElementById("rec_status");
+        const output = document.getElementById("rec_output");
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            status.innerText = "Ваш браузер не поддерживает распознавание речи (рекомендуется Chrome).";
+            btn.disabled = true;
+        } else {
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'ru-RU';
+            recognition.interimResults = false;
+            recognition.continuous = false;
+
+            let isRecording = false;
+
+            function toggleRecord() {
+                if (!isRecording) {
+                    recognition.start();
+                } else {
+                    recognition.stop();
+                }
+            }
+
+            recognition.onstart = () => {
+                isRecording = true;
+                btn.style.background = "#dc3545";
+                btn.innerText = "⏹ Остановить";
+                status.innerText = "Слушаю вас...";
+            };
+
+            recognition.onresult = (e) => {
+                const text = e.results[0][0].transcript;
+                output.innerText = text;
+                status.innerText = "Распознано! Перезагружаю для отправки...";
+                
+                // Передаем распознанный текст в Streamlit через query-параметр
+                const url = new URL(window.parent.location.href);
+                url.searchParams.set("voice_text", text);
+                window.parent.location.href = url.href;
+            };
+
+            recognition.onerror = (e) => {
+                status.innerText = "Ошибка: " + e.error;
+                resetState();
+            };
+
+            recognition.onend = () => {
+                resetState();
+            };
+
+            function resetState() {
+                isRecording = false;
+                btn.style.background = "#28a745";
+                btn.innerText = "🎙 Начать запись";
+            }
+        }
+    </script>
+    """
+    st.components.v1.html(speech_js, height=130)
+
+# 13. Ввод сообщений
 user_input = st.chat_input(
     "Введите ваш ответ на кейс тренажёра..." if is_trainer_mode else "Задайте вопрос о вузах, экзаменах, стажировках...",
     key="chat_input_box"
@@ -316,7 +493,11 @@ user_input = st.chat_input(
 active_prompt = None
 is_button_action = False
 
-if quick_prompt:
+if voice_query:
+    active_prompt = voice_query
+    is_button_action = False
+    st.query_params.clear()  # Очищаем параметр, чтобы не повторять при перезагрузке
+elif quick_prompt:
     active_prompt = quick_prompt
     is_button_action = True
 elif user_input:
@@ -355,7 +536,7 @@ if active_prompt:
 Ты работаешь в режиме «ТРЕНАЖЁР-ЭКЗАМЕНАТОР».
 Твоя цель — проверить и разобрать ответ пользователя на проблемный кейс.
 Если пользователь только что нажал кнопку запуска кейса, задай вопрос кейса живо и пригласи к ответу.
-Если пользователь ответил на кейс, обязательно структурируй разбор строго по 3 блокам:
+Если пользователь ответил на кейс (текстом или голосом), обязательно структурируй разбор строго по 3 блокам:
 1. «Это верно»: похвали за правильные мысли и точные акценты.
 2. «Вот что можно улучшить»: мягко укажи на упущенные риски, типичные ошибки новичка и слабую аргументацию.
 3. «Вот удачный пример ответа»: покажи готовую экспертную формулировку ответа из базы знаний.
