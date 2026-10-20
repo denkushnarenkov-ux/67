@@ -123,9 +123,9 @@ if not st.session_state.is_authenticated:
                     save_users(users)
                     st.success("Регистрация успешна! Теперь перейдите во вкладку «🔑 Вход в аккаунт».")
 
-    st.stop()  # Блокирует дальнейший рендер чата до успешного входа
+    st.stop()
 
-# 5. Загрузка базы знаний (Четкая инициализация без NameError)
+# 5. Загрузка базы знаний
 @st.cache_data
 def load_knowledge_base():
     try:
@@ -142,7 +142,7 @@ knowledge_base_text = json.dumps(kb_data, ensure_ascii=False, indent=2)
 disclaimer_text = kb_data.get(
     "disclaimer", 
     "⚠️ Обратите внимание: ответы бота носят исключительно информационный характер и не заменяют официальные требования вузов и работодателей."
-)[cite: 3, 9]
+)
 
 # 6. Поиск по официальным источникам
 def search_official_sources(query: str, max_results: int = 4):
