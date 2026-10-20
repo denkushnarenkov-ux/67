@@ -125,19 +125,24 @@ if not st.session_state.is_authenticated:
 
     st.stop()  # Блокирует дальнейший рендер чата до успешного входа
 
-# 5. Загрузка базы знаний
+# 5. Загрузка базы знаний (Четкая инициализация без NameError)
 @st.cache_data
 def load_knowledge_base():
     try:
         with open("knowledge_base.json", "r", encoding="utf-8") as f:
-            data = json.load(f)
-            return data
-    except Exception as e:
-        return {"disclaimer": "⚠️ Ошибка загрузки базы знаний", "scenarios": {}}
+            return json.load(f)
+    except Exception:
+        return {
+            "disclaimer": "⚠️ Обратите внимание: ответы бота носят исключительно информационный характер и не заменяют официальные требования вузов и работодателей.",
+            "scenarios": {}
+        }
 
 kb_data = load_knowledge_base()
 knowledge_base_text = json.dumps(kb_data, ensure_ascii=False, indent=2)
-disclaimer_text = kb_data.get("disclaimer", "⚠️ Обратите внимание: ответы бота носят исключительно информационный характер и не заменяют официальные требования вузов и работодателей.")[cite: 3, 9]
+disclaimer_text = kb_data.get(
+    "disclaimer", 
+    "⚠️ Обратите внимание: ответы бота носят исключительно информационный характер и не заменяют официальные требования вузов и работодателей."
+)[cite: 3, 9]
 
 # 6. Поиск по официальным источникам
 def search_official_sources(query: str, max_results: int = 4):
@@ -184,8 +189,6 @@ if "detail_mode" not in st.session_state:
     st.session_state.detail_mode = "Подробный разбор с примерами"
 if "use_search" not in st.session_state:
     st.session_state.use_search = True
-if "voice_transcript" not in st.session_state:
-    st.session_state.voice_transcript = ""
 
 # 8. Боковая панель: Профиль, Управление диалогами и Поддержка
 with st.sidebar:
@@ -407,7 +410,6 @@ with chat_box:
 with st.expander("🎤 Голосовой ответ (нажмите, чтобы продиктовать)", expanded=False):
     st.caption("Нажмите кнопку записи, разрешите микрофон и продиктуйте ваш ответ. Текст распознается автоматически:")
     
-    # Считываем переданный через URL-параметры распознанный текст (если был)
     query_params = st.query_params
     voice_query = query_params.get("voice_text", None)
 
@@ -459,7 +461,6 @@ with st.expander("🎤 Голосовой ответ (нажмите, чтобы
                 output.innerText = text;
                 status.innerText = "Распознано! Перезагружаю для отправки...";
                 
-                // Передаем распознанный текст в Streamlit через query-параметр
                 const url = new URL(window.parent.location.href);
                 url.searchParams.set("voice_text", text);
                 window.parent.location.href = url.href;
@@ -496,7 +497,7 @@ is_button_action = False
 if voice_query:
     active_prompt = voice_query
     is_button_action = False
-    st.query_params.clear()  # Очищаем параметр, чтобы не повторять при перезагрузке
+    st.query_params.clear()
 elif quick_prompt:
     active_prompt = quick_prompt
     is_button_action = True
