@@ -48,11 +48,13 @@ def load_knowledge_base():
     try:
         with open("knowledge_base.json", "r", encoding="utf-8") as f:
             data = json.load(f)
-            return json.dumps(data, ensure_ascii=False, indent=2)
+            return data
     except Exception as e:
-        return f"База знаний не загружена: {e}"
+        return {"disclaimer": "⚠️ Ошибка загрузки базы знаний", "scenarios": {}}
 
-knowledge_base_text = load_knowledge_base()
+kb_data = load_knowledge_base()
+knowledge_base_text = json.dumps(kb_data, ensure_ascii=False, indent=2)
+disclaimer_text = kb_data.get("disclaimer", "⚠️ Обратите внимание: ответы бота носят исключительно информационный характер и не заменяют официальные требования вузов и работодателей.")
 
 # 4. Поиск по официальным источникам
 def search_official_sources(query: str, max_results: int = 4):
@@ -76,11 +78,10 @@ if "chat_sessions" not in st.session_state:
                 "role": "assistant",
                 "content": (
                     "👋 **Привет! Я образовательный AI-наставник Софтлайн.**\n\n"
-                    "Я специализируюсь **только на образовании и старте карьеры** в РФ:\n"
-                    "• Подбор вузов и направлений по баллам ЕГЭ/ОГЭ и ДВИ.\n"
-                    "• Оценка и сбор портфолио для поступления и стажировок.\n"
-                    "• Поиск стажировок и вакансий для начинающих по всей России.\n\n"
-                    "*Задайте вопрос в поле ввода или выберите одну из быстрых кнопок сценариев!*"
+                    "Я помогу тебе пройти путь от выбора вуза до первой работы в IT:\n"
+                    "• **Навигатор:** подбор вузов РФ по баллам ЕГЭ, проверка аккредитации, общежитий и стажировок.\n"
+                    "• **Тренажёр:** решение реальных каверзных кейсов с экспертной обратной связью.\n\n"
+                    f"*{disclaimer_text}*"
                 ),
                 "is_button": False
             }
@@ -101,7 +102,7 @@ if "detail_mode" not in st.session_state:
 if "use_search" not in st.session_state:
     st.session_state.use_search = True
 
-# 6. Боковая панель: Управление диалогами
+# 6. Боковая панель: Управление диалогами и Поддержка
 with st.sidebar:
     st.subheader("💬 История диалогов")
     if st.button("➕ Новый чат", use_container_width=True, key="btn_create_new_chat"):
@@ -141,6 +142,39 @@ with st.sidebar:
         ]
         st.rerun()
 
+    st.divider()
+
+    # Блок технической поддержки с отправкой на почту den13ast@mail.ru
+    with st.popover("🆘 Поддержка и кураторы", use_container_width=True):
+        st.markdown("#### ✉️ Связь с наставником")
+        st.caption("Напиши свой вопрос или сообщи об ошибке — письмо придёт куратору на почту:")
+        
+        support_html = """
+        <form action="https://formsubmit.co/den13ast@mail.ru" method="POST" target="_blank">
+            <input type="hidden" name="_subject" value="Новое обращение из AI-Тренажёра Софтлайн!">
+            <input type="hidden" name="_captcha" value="false">
+            <div style="margin-bottom: 10px;">
+                <label style="font-size: 13px; color: #ccc;">Твоё имя или ник:</label><br>
+                <input type="text" name="Имя_пользователя" required style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff;">
+            </div>
+            <div style="margin-bottom: 10px;">
+                <label style="font-size: 13px; color: #ccc;">Твой контакт (Telegram / Email):</label><br>
+                <input type="text" name="Контакты" required style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff;">
+            </div>
+            <div style="margin-bottom: 12px;">
+                <label style="font-size: 13px; color: #ccc;">Твой вопрос или проблема:</label><br>
+                <textarea name="Сообщение" rows="4" required style="width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #444; background: #222; color: #fff;"></textarea>
+            </div>
+            <button type="submit" style="width: 100%; background: #007bff; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: bold;">
+                ✉️ Отправить на почту
+            </button>
+        </form>
+        """
+        st.components.v1.html(support_html, height=330)
+
+    st.markdown("---")
+    st.caption(disclaimer_text)
+
 # 7. Верхняя панель
 top_col_left, top_col_guide, top_col_settings = st.columns([2.5, 0.9, 0.9])
 
@@ -164,7 +198,7 @@ with top_col_guide:
         ---
         **2. Режимы работы:**
         * **🎓 Обычный (Навигатор)** — подбор вузов РФ по баллам ЕГЭ, проверка общежитий и военной кафедры, аудит портфолио и поиск стажировок.
-        * **🎯 Интерактивный тренажёр** — решение кейсов: собеседования, выбор факультета, адаптация в IT.
+        * **🎯 Интерактивный тренажёр** — решение проблемных кейсов (выбор вуза, собеседование, адаптация).
         """)
 
 with top_col_settings:
@@ -211,19 +245,42 @@ is_trainer_mode = (app_category == "🎯 Интерактивный тренаж
 
 if is_trainer_mode:
     st.markdown("### 🎯 Интерактивный тренажёр кейсов")
-    st.caption("Отработка реальных ситуаций: собеседование, выбор вуза, онбординг в IT-компании.")
+    st.caption("Отработка проблемных ситуаций. Бот оценит твой ответ и предложит экспертное улучшение.")
     
-    col_c1, col_c2, col_c3 = st.columns(3)
+    scenarios_data = kb_data.get("scenarios", {})
+    t_tab1, t_tab2, t_tab3 = st.tabs(["🎓 1. Выбор вуза", "💼 2. Собеседование", "🚀 3. Адаптация в IT"])
     quick_prompt = None
-    with col_c1:
-        if st.button("🎓 Кейс: Выбор вуза", use_container_width=True, key="btn_case_1"):
-            quick_prompt = "Давай пройдем тренировочный кейс 1: Выбор вуза и поступление. Опиши проблемную ситуацию и задай кейс-вопрос."
-    with col_c2:
-        if st.button("💼 Кейс: Собеседование", use_container_width=True, key="btn_case_2"):
-            quick_prompt = "Давай пройдем кейс 2: Собеседование и вопрос о провале в проекте. Задай вопрос работодателя."
-    with col_c3:
-        if st.button("🚀 Кейс: Адаптация стажёра", use_container_width=True, key="btn_case_3"):
-            quick_prompt = "Давай пройдем кейс 3: Застрял на рабочей задаче в компании. Задай кейс."
+
+    with t_tab1:
+        c1, c2, c3 = st.columns(3)
+        cases_1 = scenarios_data.get("1", {}).get("cases", [])
+        if len(cases_1) > 0 and c1.button("Кейс 1: Внутренняя кухня", use_container_width=True, key="btn_c1_1"):
+            quick_prompt = f"Запусти кейс: {cases_1[0]['question']}"
+        if len(cases_1) > 1 and c2.button("Кейс 2: Риски баллов", use_container_width=True, key="btn_c1_2"):
+            quick_prompt = f"Запусти кейс: {cases_1[1]['question']}"
+        if len(cases_1) > 2 and c3.button("Кейс 3: Аккредитация", use_container_width=True, key="btn_c1_3"):
+            quick_prompt = f"Запусти кейс: {cases_1[2]['question']}"
+
+    with t_tab2:
+        c4, c5, c6 = st.columns(3)
+        cases_2 = scenarios_data.get("2", {}).get("cases", [])
+        if len(cases_2) > 0 and c4.button("Кейс 1: Провал в проекте", use_container_width=True, key="btn_c2_1"):
+            quick_prompt = f"Запусти кейс: {cases_2[0]['question']}"
+        if len(cases_2) > 1 and c5.button("Кейс 2: Пустое резюме", use_container_width=True, key="btn_c2_2"):
+            quick_prompt = f"Запусти кейс: {cases_2[1]['question']}"
+        if len(cases_2) > 2 and c6.button("Кейс 3: Сложный вопрос", use_container_width=True, key="btn_c2_3"):
+            quick_prompt = f"Запусти кейс: {cases_2[2]['question']}"
+
+    with t_tab3:
+        c7, c8, c9 = st.columns(3)
+        cases_3 = scenarios_data.get("3", {}).get("cases", [])
+        if len(cases_3) > 0 and c7.button("Кейс 1: Застрял на задаче", use_container_width=True, key="btn_c3_1"):
+            quick_prompt = f"Запусти кейс: {cases_3[0]['question']}"
+        if len(cases_3) > 1 and c8.button("Кейс 2: Неясные требования", use_container_width=True, key="btn_c3_2"):
+            quick_prompt = f"Запусти кейс: {cases_3[1]['question']}"
+        if len(cases_3) > 2 and c9.button("Кейс 3: Ошибка в git/стенде", use_container_width=True, key="btn_c3_3"):
+            quick_prompt = f"Запусти кейс: {cases_3[2]['question']}"
+
 else:
     st.markdown("### 🎓 Карьерный и образовательный навигатор")
     st.caption("Поиск вузов по РФ, анализ портфолио и подбор вакансий/стажировок.")
@@ -252,7 +309,7 @@ with chat_box:
 
 # 10. Ввод сообщений
 user_input = st.chat_input(
-    "Введите ваш ответ на кейс..." if is_trainer_mode else "Задайте вопрос о вузах, экзаменах, стажировках...",
+    "Введите ваш ответ на кейс тренажёра..." if is_trainer_mode else "Задайте вопрос о вузах, экзаменах, стажировках...",
     key="chat_input_box"
 )
 
@@ -288,16 +345,32 @@ if active_prompt:
                 message_placeholder = st.empty()
                 
                 web_context = ""
-                if st.session_state.use_search:
+                if st.session_state.use_search and not is_trainer_mode:
                     with st.spinner("🔍 Проверяю официальные сайты вузов..."):
                         web_context = search_official_sources(active_prompt)
 
                 with st.spinner("AI готовит ответ..."):
-                    detail_instruction = (
-                        "Отвечай глубоко, пошагово, с конкретными примерами и кликабельными ссылками на официальные источники [Название](URL)."
-                        if "Подробный" in st.session_state.detail_mode
-                        else "Отвечай структурированно, кратко и строго по пунктам."
-                    )
+                    if is_trainer_mode:
+                        mode_instruction = """
+Ты работаешь в режиме «ТРЕНАЖЁР-ЭКЗАМЕНАТОР».
+Твоя цель — проверить и разобрать ответ пользователя на проблемный кейс.
+Если пользователь только что нажал кнопку запуска кейса, задай вопрос кейса живо и пригласи к ответу.
+Если пользователь ответил на кейс, обязательно структурируй разбор строго по 3 блокам:
+1. «Это верно»: похвали за правильные мысли и точные акценты.
+2. «Вот что можно улучшить»: мягко укажи на упущенные риски, типичные ошибки новичка и слабую аргументацию.
+3. «Вот удачный пример ответа»: покажи готовую экспертную формулировку ответа из базы знаний.
+Тон: доброжелательный, опытный старший наставник (IT-ментор компании «Софтлайн»).
+"""
+                    else:
+                        detail_instruction = (
+                            "Отвечай глубоко, пошагово, с конкретными примерами и кликабельными ссылками на официальные источники [Название](URL)."
+                            if "Подробный" in st.session_state.detail_mode
+                            else "Отвечай структурированно, кратко и строго по пунктам."
+                        )
+                        mode_instruction = f"""
+Ты работаешь в режиме «ОБЫЧНЫЙ НАВИГАТОР». Выдавай проверенную информацию по вузам, баллам, общежитиям, аккредитации и стажировкам.
+{detail_instruction}
+"""
 
                     system_instruction = f"""
 Ты — специализированный виртуальный AI-наставник и карьерный консультант компании «Софтлайн Решения».
@@ -307,18 +380,21 @@ if active_prompt:
 На любые посторонние темы (игры, кино, рецепты, быт) вежливо откажи и верни диалог к теме учебы.
 
 ПРАВИЛА РОССИЙСКОЙ СИСТЕМЫ ОБРАЗОВАНИЯ:
-- Баллы ЕГЭ строго от 0 до 100 за один предмет. Сумма за 3 предмета — до 300.
+- Баллы ЕГЭ строго от 0 до 100 за один предмет. Сумма за 3 предмета — до 300 (до 310 с учетом личных достижений).
+
+ЕСЛИ ПОЛЬЗОВАТЕЛЬ ПРОСИТ ПОМОЩЬ ЧЕЛОВЕКА ИЛИ ТЕХПОДДЕРЖКУ:
+Вежливо подскажи, что ты AI-ассистент, и направь его в форму поддержки в боковой панели (кнопка «🆘 Поддержка и кураторы»), либо предложи написать кураторам напрямую на почту den13ast@mail.ru.
 
 БАЗА ЗНАНИЙ (JSON):
 {knowledge_base_text}
 
 ДАННЫЕ С ОФИЦИАЛЬНЫХ САЙТОВ:
-{web_context if web_context else "Прямой поиск отключен или не дал результатов."}
+{web_context if web_context else "Прямой поиск отключен или не требовался в этом режиме."}
 
-ТЕКУЩИЙ РЕЖИМ РАБОТЫ: {'ИНТЕРАКТИВНЫЙ ТРЕНАЖЁР' if is_trainer_mode else 'ОБЫЧНЫЙ НАВИГАТОР'}
+{mode_instruction}
 
-ТРЕБОВАНИЯ К ДЕТАЛИЗАЦИИ:
-{detail_instruction}
+В конце ответа всегда добавляй короткое примечание:
+«{disclaimer_text}»
 """
                     clean_key = st.session_state.api_key.strip()
                     context_messages = current_messages[-6:]
